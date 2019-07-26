@@ -1,0 +1,37 @@
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    app: iioflux
+  name: iioflux
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: iioflux
+  template:
+    metadata:
+      labels:
+        app: iioflux
+    spec:
+      containers:
+      - name: iioflux
+        image: jonkerj/iioflux:v2
+        imagePullPolicy: Always
+        volumeMounts:
+        - name: config
+          mountPath: /config
+          readOnly: true
+#          subPath: config.yaml
+        - name: secrets
+          mountPath: /secrets
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: config
+      - name: secrets
+        secret:
+          secretName: secrets
+...

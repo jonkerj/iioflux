@@ -1,0 +1,38 @@
+---
+hosts:
+- name: boron
+  uri: ip:172.21.42.5
+  devices:
+  - name: bme280
+    match:
+      name: bme280
+  - name: si7020
+    match:
+      name: 1-0040
+  - name: thermal
+    match: 
+      name: 1c25000.thermal-sensor
+- name: oxygen
+  uri: ip:172.21.42.8
+  devices:
+  - name: thermal
+    match: 
+      name: 1c25000.thermal-sensor
+- name: sulfur
+  uri: ip:172.21.42.16
+  devices:
+  - name: thermal
+    match: 
+      name: 1c25000.thermal-sensor
+- name: potassium
+  uri: ip:172.21.42.19
+  devices:
+  - name: thermal
+    match: 
+      name: 1c25000.thermal-sensor
+influxdb:
+  connection:
+    host: influxdb.influxdb
+    port: 8086
+    database: fixed
+...
