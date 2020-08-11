@@ -10,12 +10,6 @@ import influxdb
 import iio
 import yaml
 
-logging.basicConfig(
-	format="%(asctime)s %(levelname)s:%(name)s: %(message)s",
-	level=logging.INFO,
-	datefmt="%H:%M:%S",
-	stream=sys.stderr,
-)
 logger = logging.getLogger("iio-influx")
 
 class IIOSubmitter(object):
@@ -45,7 +39,7 @@ class IIOSubmitter(object):
 			d = self.match_device(device['match'])
 			if d:
 				self.devices[device['name']] = d
-		self.logger.info(f'Loaded devices {",".join(self.devices.keys())}')
+		self.logger.info(f'Loaded devices: {",".join(self.devices.keys())}')
 
 	def measurements(self):
 		self.logger.info(f'Polling new measurements')
@@ -68,6 +62,7 @@ class IIOSubmitter(object):
 				for key, func in ops:
 					if key in channel.attrs:
 						c = func(c, float(channel.attrs[key].value))
+				self.logger.debug(f'Making a point: {channel.id}={c}')
 				point['fields'][channel.id] = c
 			yield point
 
@@ -85,6 +80,7 @@ class SignalHandler(object):
 	
 	def sleep(self, t):
 		t0 = time.time()
+		self.logger.debug(f'Sleeping {t}s')
 		while not self.stop and (time.time() - t0) < t:
 			time.sleep(1)
 
@@ -104,7 +100,11 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 	parser.add_argument('-c', '--config', required=True, dest='config', help='Config file to use')
 	parser.add_argument('-s', '--secrets', required=True, dest='secrets', help='Path to mounted secrets')
+	parser.add_argument('--log', dest='loglevel', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], default='INFO', help='Set the logging level')
+
 	args = parser.parse_args()
+
+	logging.basicConfig(format='%(asctime)s %(levelname)s:%(name)s - %(message)s', datefmt='%H:%M:%S', level=getattr(logging, args.loglevel))
 
 	assert os.path.exists(args.config), f'configfile ({args.config}) does not exist'
 	config = yaml.load(open(args.config, 'r'))
