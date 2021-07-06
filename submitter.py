@@ -6,8 +6,9 @@ import os.path
 import signal
 import sys
 import time
-import influxdb
+
 import iio
+import influxdb
 import yaml
 
 logger = logging.getLogger("iio-influx")
