@@ -12,7 +12,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
     - name: Bump version and tag
-      uses: mathieudutour/github-tag-action@v5.5
+      uses: mathieudutour/github-tag-action@v5.6
       id: tag
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}

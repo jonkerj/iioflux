@@ -8,10 +8,31 @@ import sys
 import time
 
 import iio
-import influxdb
+import environ
+
+from influxdb_client import InfluxDBClient, Point
+from influxdb_client.client.write_api import SYNCHRONOUS
 import yaml
 
-logger = logging.getLogger("iio-influx")
+def convLoglevel(s):
+	levels = ['CRITICAL', 'FATAL', 'ERROR', 'WARNING', 'WARN', 'INFO', 'DEBUG']
+
+	if not s in levels:
+			raise ValueError(f'{s} is not a valid log level. Valid are {"".join(choices)}')
+
+	return s
+
+def convertSensorconfig(s):
+	if not os.path.exists(s):
+		raise ValueError(f'Sensor config file "{s}" does not exist')
+
+	with open(s, 'r') as f:
+		sensorconfig = yaml.safe_load(f)
+	
+	if not 'hosts' in sensorconfig:
+		raise ValueError('Sensor config does not contain "hosts" key')
+	
+	return sensorconfig
 
 class IIOSubmitter(object):
 	def match_device(self, match):
@@ -28,15 +49,16 @@ class IIOSubmitter(object):
 				return d
 		return None
 
-	def __init__(self, config, influx_client):
-		self.name = config['name']
+	def __init__(self, remote_config, write_api, config, logger):
+		self.name = remote_config['name']
 		self.logger = logger.getChild(self.name)
 		self.logger.info('Creating IIOSubmitter object')
-		self.context = iio.Context(config['uri'])
+		self.config = config
+		self.write_api = write_api
+		self.context = iio.Context(remote_config['uri'])
 		self.devices = {}
-		self.idb = influx_client
 
-		for device in config['devices']:
+		for device in remote_config['devices']:
 			d = self.match_device(device['match'])
 			if d:
 				self.devices[device['name']] = d
@@ -53,22 +75,22 @@ class IIOSubmitter(object):
 		zone = datetime.datetime.now(datetime.timezone.utc).astimezone()
 		t = datetime.datetime.now().replace(tzinfo=zone.tzinfo)
 		for name, device in self.devices.items():
-			point = {
-				'measurement': name,
-				'time': t,
-				'fields': {},
-			}
+			point = Point(name).time(t).tag('host', self.name)
 			for channel in device.channels:
 				c = 0
 				for key, func in ops:
 					if key in channel.attrs:
 						c = func(c, float(channel.attrs[key].value))
-				self.logger.debug(f'Making a point: {channel.id}={c}')
-				point['fields'][channel.id] = c
+				self.logger.debug(f'Making a field: {channel.id}={c}')
+				point.field(channel.id, c)
 			yield point
+	
+	def tick(self):
+		for p in self.measurements():
+			self.write_api.write(bucket=self.config.influxdb_bucket, record=p)
 
 class SignalHandler(object):
-	def __init__(self):
+	def __init__(self, logger):
 		self.stop = False
 		self.logger = logger.getChild('signalhandler')
 		signal.signal(signal.SIGINT, self.exit_gracefully)
@@ -85,45 +107,33 @@ class SignalHandler(object):
 		while not self.stop and (time.time() - t0) < t:
 			time.sleep(1)
 
+@environ.config(prefix="IIO")
+class Config:
+	loglevel = environ.var('INFO', converter=convLoglevel)
+	sensorconfig = environ.var(converter=convertSensorconfig)
+	influxdb_bucket = environ.var('solar', name='INFLUXDB_V2_BUCKET')
+
 def main(config):
+	logger = logging.getLogger("iioflux")
+	logging.basicConfig(format='%(asctime)s %(levelname)s:%(name)s - %(message)s', datefmt='%H:%M:%S', level=config.loglevel)
 	logger.info(f'Connecting to InfluxDB')
-	idb = influxdb.InfluxDBClient(**config['influxdb']['connection'])
-	submitters = [IIOSubmitter(host, idb) for host in config['hosts']]
+	idb = InfluxDBClient.from_env_properties()
+	write_api = idb.write_api(write_options=SYNCHRONOUS)
+
+	bucket = config.influxdb_bucket
+
+	submitters = [IIOSubmitter(host, write_api, config, logger) for host in config.sensorconfig['hosts']]
+	
 	logger.info(f'Ready for action')
-	handler = SignalHandler()
+	
+	handler = SignalHandler(logger)
 	while not handler.stop:
 		for submitter in submitters:
-			idb.write_points(tags={'host': submitter.name}, points=list(submitter.measurements()))
+			submitter.tick()
+			write_api.write(bucket = bucket, record = [p.tag('host', submitter.name) for p in submitter.measurements()])
 		handler.sleep(60)
 	logger.info(f'Quitting')
 
 if __name__ == '__main__':
-	parser = argparse.ArgumentParser()
-	parser.add_argument('-c', '--config', required=True, dest='config', help='Config file to use')
-	parser.add_argument('-s', '--secrets', required=True, dest='secrets', help='Path to mounted secrets')
-	parser.add_argument('--log', dest='loglevel', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], default='INFO', help='Set the logging level')
-
-	args = parser.parse_args()
-
-	logging.basicConfig(format='%(asctime)s %(levelname)s:%(name)s - %(message)s', datefmt='%H:%M:%S', level=getattr(logging, args.loglevel))
-
-	assert os.path.exists(args.config), f'configfile ({args.config}) does not exist'
-	config = yaml.load(open(args.config, 'r'))
-	for key in ['hosts', 'influxdb']:
-		assert key in config, f'Configuration does not have "{key}" section'
-	
-	assert os.path.exists(args.secrets), f'secrets dir ({args.secrets}) does not exist'
-	assert os.path.isdir(args.secrets), f'secrets path ({args.secrets}) is not a directory'
-	
-	# merge secret values (eg: influxdb.connection.username) into config hash
-	for key in os.listdir(args.secrets):
-		if key.startswith('..'):
-			continue
-		logger.debug(f'merging {key}')
-		parts = key.split('.')
-		current = config
-		for k in parts[:-1]:
-			current = current[k]
-		current[parts[-1]] = open(os.path.join(args.secrets, key), 'r').read().strip()
-	
+	config = Config.from_environ()
 	main(config)

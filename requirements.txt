@@ -1,0 +1,3 @@
+environ-config==21.2.0
+influxdb-client[ciso]==1.23.0
+PyYAML==6.0

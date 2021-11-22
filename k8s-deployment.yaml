@@ -1,5 +1,5 @@
 ---
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
@@ -17,21 +17,32 @@ spec:
     spec:
       containers:
       - name: iioflux
-        image: jonkerj/iioflux:v2
+        image: jonkerj/iioflux:v1.0.0
         imagePullPolicy: Always
+        env:
+        - name: IIO_SENSORCONFIG
+          value: /config/sensors.yaml
+        - name: INFLUXDB_V2_BUCKET
+          value: iioflux/autogen
+        - name: INFLUXDB_V2_URL
+          value: http://influxdb.influxdb:8086
+        envFrom:
+        - secretRef:
+            name: influxdb-creds
         volumeMounts:
         - name: config
           mountPath: /config
-          readOnly: true
-#          subPath: config.yaml
-        - name: secrets
-          mountPath: /secrets
           readOnly: true
       volumes:
       - name: config
         configMap:
           name: config
-      - name: secrets
-        secret:
-          secretName: secrets
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: influxdb-creds
+type: Opaque
+data:
+  INFLUXDB_V2_TOKEN: Zm9vOmJhcg==
 ...
