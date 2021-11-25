@@ -1,5 +1,5 @@
 # IIOFlux
-An IIO-to-InfluxDB submitter for Kubernetes, written in Python
+An IIO-to-InfluxDB submitter for Kubernetes, written in Go
 
 ## Usage
 ```
