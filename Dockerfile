@@ -1,16 +1,7 @@
-FROM debian:bullseye-slim as base
-RUN apt-get update && apt-get install -y python3 python3-libiio
+FROM golang:1.17 as builder
+COPY . .
+RUN CGO_ENABLED=0 go build -o /app main.go
 
-# build
-FROM base as builder
-RUN apt-get update && apt-get install -y build-essential python3-venv libpython3-dev
-RUN python3 -m venv --system-site-packages /venv 
-COPY requirements.txt /venv
-RUN /venv/bin/pip install -r /venv/requirements.txt
-
-# run
-FROM base as runner
-WORKDIR /app
-COPY --from=builder /venv /venv
-COPY submitter.py /app/submitter.py
-CMD ["/venv/bin/python3", "submitter.py"]
+FROM scratch
+COPY --from=builder /app /app
+ENTRYPOINT ["/app"]
