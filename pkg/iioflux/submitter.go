@@ -33,9 +33,10 @@ func NewSubmitter(c *Config, idbConfig *InfluxDBConfig, interval string) (*Submi
 		return nil, fmt.Errorf("influxdb server was not healthy, status=%v", health.Status)
 	}
 
-	log.Infof("connected with InfluxDB version %s", *health.Version)
+	log.Infof("connected with InfluxDB at %s version %s", idbConfig.URL, *health.Version)
 
 	submitter.influxWriteAPI = submitter.influxDBClient.WriteAPI(idbConfig.Org, idbConfig.Bucket)
+	log.Infof("going to use org \"%\" with bucket %s", idbConfig.Org, idbConfig.Bucket)
 
 	d, err := time.ParseDuration(interval)
 	if err != nil {
