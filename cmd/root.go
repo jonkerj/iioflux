@@ -28,7 +28,11 @@ func init() {
 	flags.String("influxdb_url", "http://influxdb.influxdb:8086", "InfluxDB URL")
 	flags.String("influxdb_token", "notme:notmypassword", "InfluxDB token")
 	flags.String("influxdb_bucket", "iioflux/autogen", "InfluxDB bucket")
-	viper.BindPFlags(flags)
+
+	err := viper.BindPFlags(flags)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func root(cmd *cobra.Command, args []string) {
@@ -60,5 +64,8 @@ func root(cmd *cobra.Command, args []string) {
 }
 
 func Execute() {
-	rootCmd.Execute()
+	err := rootCmd.Execute()
+	if err != nil {
+		panic(err)
+	}
 }

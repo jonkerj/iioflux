@@ -36,7 +36,7 @@ func NewSubmitter(c *Config, idbConfig *InfluxDBConfig, interval string) (*Submi
 	log.Infof("connected with InfluxDB at %s version %s", idbConfig.URL, *health.Version)
 
 	submitter.influxWriteAPI = submitter.influxDBClient.WriteAPI(idbConfig.Org, idbConfig.Bucket)
-	log.Infof("going to use org \"%\" with bucket %s", idbConfig.Org, idbConfig.Bucket)
+	log.Infof("going to use org \"%s\" with bucket %s", idbConfig.Org, idbConfig.Bucket)
 
 	d, err := time.ParseDuration(interval)
 	if err != nil {
@@ -58,7 +58,11 @@ func (s *Submitter) poll() {
 		go func(host string, client *IIOClient) {
 			defer wg.Done()
 
-			client.Client.FetchAttributes()
+			err := client.Client.FetchAttributes()
+			if err != nil {
+				log.Warnf("error fetching attributes: %s", err.Error())
+				return
+			}
 
 			for _, device := range client.Devices {
 				d := client.Client.Context.GetDeviceByNameOrID(device.Match.Name, device.Match.ID)
