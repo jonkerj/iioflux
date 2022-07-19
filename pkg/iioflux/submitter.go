@@ -82,6 +82,7 @@ func (s *Submitter) poll() {
 		}(host, client)
 	}
 	wg.Wait()
+	s.influxWriteAPI.Flush()
 }
 
 func (s *Submitter) Run() {
